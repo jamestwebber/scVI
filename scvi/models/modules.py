@@ -101,7 +101,15 @@ class Encoder(nn.Module):
         self.mean_encoder = nn.Linear(n_hidden, n_output)
         self.var_encoder = nn.Linear(n_hidden, n_output)
 
-    def reparameterize(self, mu, var):
+    def reparameterize(self, mu: torch.Tensor, var: torch.Tensor):
+        r"""Helper function to sample from an i.i.d. multivariate normal
+        \\( \\sim N(q_m, \\mathbf{I}q_v) \\)
+
+        :param mu: tensor of mean values
+        :param var: diagonal of the variance matrix
+        :return: tensor representing a sample from the distribution
+        :rtype: :py:class:`torch.Tensor`
+        """
         return Normal(mu, var.sqrt()).rsample()
 
     def forward(self, x: torch.Tensor, *cat_list: int):
