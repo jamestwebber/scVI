@@ -76,7 +76,7 @@ class VAE(nn.Module):
         # decoder goes from n_latent-dimensional space to n_input-d data
         self.decoder = DecoderSCVI(n_latent, n_input, n_cat_list=[n_batch], n_layers=n_layers, n_hidden=n_hidden)
 
-    def get_latents(self, x, y=None):
+    def get_latents(self, x: torch.Tensor, y: torch.Tensor = None):
         r""" returns the result of ``sample_from_posterior_z`` inside a list
 
         :param x: tensor of values with shape ``(batch_size, n_input)``
@@ -86,9 +86,9 @@ class VAE(nn.Module):
         """
         return [self.sample_from_posterior_z(x, y)]
 
-    def sample_from_posterior_z(self, x, y=None):
-        r""" samples the tensor of latent values from the posterior
-        #doesn't really sample, returns the means of the posterior distribution
+    def sample_from_posterior_z(self, x: torch.Tensor, y: torch.Tensor = None):
+        r""" "samples" the tensor of latent values from the posterior. Doesn't
+        really sample: returns the means of the posterior distribution
 
         :param x: tensor of values with shape ``(batch_size, n_input)``
         :param y: tensor of cell-types labels with shape ``(batch_size, n_labels)``
@@ -100,12 +100,11 @@ class VAE(nn.Module):
         qz_m, qz_v, z = self.z_encoder(x, y)  # y only used in VAEC
         return z
 
-    def sample_from_posterior_l(self, x):
-        r""" samples the tensor of library sizes from the posterior
-        #doesn't really sample, returns the tensor of the means of the posterior distribution
+    def sample_from_posterior_l(self, x: torch.Tensor):
+        r""" "samples" the tensor of library sizes from the posterior. Doesn't
+        really sample: returns the means of the posterior distribution
 
         :param x: tensor of values with shape ``(batch_size, n_input)``
-        :param y: tensor of cell-types labels with shape ``(batch_size, n_labels)``
         :return: tensor of shape ``(batch_size, 1)``
         :rtype: :py:class:`torch.Tensor`
         """
@@ -114,7 +113,8 @@ class VAE(nn.Module):
         ql_m, ql_v, library = self.l_encoder(x)
         return library
 
-    def get_sample_scale(self, x, batch_index=None, y=None, n_samples=1):
+    def get_sample_scale(self, x: torch.Tensor, batch_index: torch.Tensor = None,
+                         y: torch.Tensor = None, n_samples: int = 1):
         r"""Returns the tensor of predicted frequencies of expression
 
         :param x: tensor of values with shape ``(batch_size, n_input)``
@@ -126,7 +126,8 @@ class VAE(nn.Module):
         """
         return self.inference(x, batch_index=batch_index, y=y, n_samples=n_samples)[0]
 
-    def get_sample_rate(self, x, batch_index=None, y=None, n_samples=1):
+    def get_sample_rate(self, x: torch.Tensor, batch_index: torch.Tensor = None,
+                        y: torch.Tensor = None, n_samples: int = 1):
         r"""Returns the tensor of means of the negative binomial distribution
 
         :param x: tensor of values with shape ``(batch_size, n_input)``
@@ -138,15 +139,26 @@ class VAE(nn.Module):
         """
         return self.inference(x, batch_index=batch_index, y=y, n_samples=n_samples)[2]
 
-    def _reconstruction_loss(self, x, px_rate, px_r, px_dropout):
-        # Reconstruction Loss
+    def _reconstruction_loss(self, x: torch.Tensor, px_rate: torch.Tensor,
+                             px_r: torch.Tensor, px_dropout: torch.Tensor):
+        r"""Calculates the reconstruction loss according to the specified model
+
+        :param x: tensor of observed values with shape ``(batch_size, n_input)``
+        :param px_rate: rate parameter for negative binomial distribution
+        :param px_r: r parameter for negative binomial distribution
+        :param px_dropout: dropout rate for zero-inflation
+        :return: reconstruction loss of x given the input parameters
+        :rtype: :py:class:`torch.Tensor`
+        """
         if self.reconstruction_loss == 'zinb':
             reconst_loss = -log_zinb_positive(x, px_rate, px_r, px_dropout)
-        elif self.reconstruction_loss == 'nb':
+        else:
+            # self.reconstruction_loss == 'nb':
             reconst_loss = -log_nb_positive(x, px_rate, px_r)
         return reconst_loss
 
-    def inference(self, x, batch_index=None, y=None, n_samples=1):
+    def inference(self, x: torch.Tensor, batch_index: torch.Tensor = None,
+                  y: torch.Tensor = None, n_samples: int = 1):
         x_ = x
         if self.log_variational:
             x_ = torch.log(1 + x_)
@@ -174,7 +186,9 @@ class VAE(nn.Module):
 
         return px_scale, px_r, px_rate, px_dropout, qz_m, qz_v, z, ql_m, ql_v, library
 
-    def forward(self, x, local_l_mean, local_l_var, batch_index=None, y=None):
+    def forward(self, x: torch.Tensor, local_l_mean: torch.Tensor,
+                local_l_var: torch.Tensor, batch_index: torch.Tensor=None,
+                y: torch.Tensor = None):
         r""" Returns the reconstruction loss and the Kullback divergences
 
         :param x: tensor of values with shape (batch_size, n_input)
