@@ -127,7 +127,7 @@ class Encoder(nn.Module):
 
 # Decoder
 class DecoderSCVI(nn.Module):
-    r"""Decodes data from latent space of ``n_input`` dimensions ``n_output``
+    r"""Decodes data from latent space of ``n_input`` dimensions to ``n_output``
     dimensions using a fully-connected neural network of ``n_hidden`` layers.
 
     :param n_input: The dimensionality of the input (latent space)
