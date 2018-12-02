@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import scipy
 import torch
+import os
 from matplotlib import pyplot as plt
 from scipy.stats import kde, entropy
 from sklearn.cluster import KMeans
@@ -132,6 +133,7 @@ class Posterior:
             print("True LL : %.4f" % ll)
         return ll
 
+    @torch.no_grad()
     def get_latent(self, sample=False):
         latent = []
         batch_indices = []
@@ -148,6 +150,7 @@ class Posterior:
             labels += [label]
         return np.array(torch.cat(latent)), np.array(torch.cat(batch_indices)), np.array(torch.cat(labels)).ravel()
 
+    @torch.no_grad()
     def entropy_batch_mixing(self, verbose=False, **kwargs):
         if self.gene_dataset.n_batches == 2:
             latent, batch_indices, labels = self.get_latent()
@@ -158,6 +161,7 @@ class Posterior:
 
     entropy_batch_mixing.mode = 'max'
 
+    @torch.no_grad()
     def differential_expression_stats(self, M_sampling=100):
         """
         Output average over statistics in a symmetric way (a against b)
@@ -170,6 +174,8 @@ class Posterior:
         px_scales = []
         all_labels = []
         batch_size = max(self.data_loader_kwargs['batch_size'] // M_sampling, 2)  # Reduce batch_size on GPU
+        if len(self.gene_dataset) % batch_size == 1:
+            batch_size += 1
         for tensors in self.update({"batch_size": batch_size}):
             sample_batch, _, _, batch_index, labels = tensors
             px_scales += [
@@ -187,6 +193,7 @@ class Posterior:
 
         return px_scales, all_labels
 
+    @torch.no_grad()
     def differential_expression_score(self, cell_type, other_cell_type=None, genes=None, M_sampling=100,
                                       M_permutation=10000, permutation=False):
         px_scale, all_labels = self.differential_expression_stats(M_sampling=M_sampling)
@@ -197,6 +204,7 @@ class Posterior:
                                                M_permutation=M_permutation, permutation=permutation)
         return bayes_factors_list
 
+    @torch.no_grad()
     def differential_expression_table(self, output_file=False, select=10, M_sampling=100, M_permutation=10000,
                                       permutation=False):
         px_scale, all_labels = self.differential_expression_stats(M_sampling=M_sampling)
@@ -226,6 +234,7 @@ class Posterior:
             writer.close()
         return genes, expression
 
+    @torch.no_grad()
     def imputation(self, n_samples=1):
         imputed_list = []
         for tensors in self:
@@ -235,6 +244,7 @@ class Posterior:
         imputed_list = np.concatenate(imputed_list)
         return imputed_list.squeeze()
 
+    @torch.no_grad()
     def generate(self, n_samples=100, genes=None):  # with n_samples>1 return original list/ otherwose sequential
         '''
         Return original_values as y and generated as x (for posterior density visualization)
@@ -272,6 +282,7 @@ class Posterior:
 
         return np.concatenate(posterior_list, axis=0), np.concatenate(original_list, axis=0)
 
+    @torch.no_grad()
     def generate_parameters(self):
         dropout_list = []
         mean_list = []
@@ -287,6 +298,7 @@ class Posterior:
 
         return np.concatenate(dropout_list), np.concatenate(mean_list), np.concatenate(dispersion_list)
 
+    @torch.no_grad()
     def get_stats(self, verbose=True):
         libraries = []
         for tensors in self.sequential(batch_size=128):
@@ -297,6 +309,7 @@ class Posterior:
         libraries = np.concatenate(libraries)
         return libraries.ravel()
 
+    @torch.no_grad()
     def get_sample_scale(self):
         px_scales = []
         for tensors in self:
@@ -307,6 +320,7 @@ class Posterior:
                          ).cpu())]
         return np.concatenate(px_scales)
 
+    @torch.no_grad()
     def imputation_list(self, n_samples=1):
         original_list = []
         imputed_list = []
@@ -336,6 +350,7 @@ class Posterior:
                 imputed_list = np.array([])
         return original_list, imputed_list
 
+    @torch.no_grad()
     def imputation_score(self, verbose=False, original_list=None, imputed_list=None, n_samples=1):
         if original_list is None or imputed_list is None:
             original_list, imputed_list = self.imputation_list(n_samples=n_samples)
@@ -344,7 +359,8 @@ class Posterior:
                 return 0
         return np.median(np.abs(np.concatenate(original_list) - np.concatenate(imputed_list)))
 
-    def imputation_benchmark(self, n_samples=8, verbose=False):
+    @torch.no_grad()
+    def imputation_benchmark(self, n_samples=8, verbose=False, title_plot='imputation', save_path=''):
         original_list, imputed_list = self.imputation_list(n_samples=n_samples)
         # Median of medians for all distances
         median_score = self.imputation_score(original_list=original_list, imputed_list=imputed_list)
@@ -359,9 +375,11 @@ class Posterior:
         if verbose:
             print("\nMedian of Median: %.4f\nMean of Median for each cell: %.4f" % (median_score, mean_score))
 
-        plot_imputation(np.concatenate(original_list), np.concatenate(imputed_list))
+        plot_imputation(np.concatenate(original_list), np.concatenate(imputed_list), title=os.path.join(save_path,
+                                                                                                        title_plot))
         return original_list, imputed_list
 
+    @torch.no_grad()
     def knn_purity(self, verbose=False):
         latent, _, labels = self.get_latent()
         score = knn_purity(latent, labels)
@@ -371,6 +389,7 @@ class Posterior:
 
     knn_purity.mode = 'max'
 
+    @torch.no_grad()
     def clustering_scores(self, verbose=True, prediction_algorithm='knn'):
         if self.gene_dataset.n_labels > 1:
             latent, _, labels = self.get_latent()
@@ -390,6 +409,7 @@ class Posterior:
                       (asw_score, nmi_score, ari_score, uca_score))
             return asw_score, nmi_score, ari_score, uca_score
 
+    @torch.no_grad()
     def nn_overlap_score(self, verbose=True, **kwargs):
         '''
         Quantify how much the similarity between cells in the mRNA latent space resembles their similarity at the
@@ -405,6 +425,7 @@ class Posterior:
                       (spearman_correlation, fold_enrichment))
             return spearman_correlation, fold_enrichment
 
+    @torch.no_grad()
     def show_t_sne(self, n_samples=1000, color_by='', save_name='', latent=None, batch_indices=None,
                    labels=None, n_batch=None):
         # If no latent representation is given
